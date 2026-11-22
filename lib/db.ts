@@ -72,6 +72,8 @@ export function getDb(dbPathOverride?: string): Database.Database {
   let dbPath: string;
   if (dbPathOverride) {
     dbPath = dbPathOverride;
+  } else if (process.env.VERCEL) {
+    dbPath = path.join('/tmp', 'laminar.db');
   } else {
     const dbDir = path.join(process.cwd(), 'data');
     if (!fs.existsSync(dbDir)) {
