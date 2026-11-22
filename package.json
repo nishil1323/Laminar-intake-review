@@ -1,0 +1,43 @@
+{
+  "name": "laminar-intake-review",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "db:clear": "node -e \"const Database=require('better-sqlite3');const db=new Database('data/laminar.db');db.prepare('DELETE FROM drafts').run();db.prepare('DELETE FROM pms_entries').run();db.pragma('wal_checkpoint(TRUNCATE)');db.exec('VACUUM');db.close();console.log('Database cleared!');\"",
+    "test:unit": "tsx --test tests/unit/**/*.test.ts",
+    "test:integration": "tsx --test tests/integration/**/*.test.ts",
+    "test": "npm run test:unit && npm run test:integration",
+    "test:e2e": "tsx scripts/test-e2e.ts",
+    "test:e2e:tier1": "tsx scripts/test-e2e.ts --tier 1",
+    "test:e2e:tier2": "tsx scripts/test-e2e.ts --tier 2",
+    "test:e2e:tier3": "tsx scripts/test-e2e.ts --tier 3",
+    "test:e2e:tier4": "tsx scripts/test-e2e.ts --tier 4"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "better-sqlite3": "^13.2.0",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.468.0",
+    "next": "^14.2.24",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwind-merge": "^2.5.5",
+    "uuid": "^11.0.5"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^20.17.10",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@types/uuid": "^10.0.0",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
