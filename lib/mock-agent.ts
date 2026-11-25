@@ -92,11 +92,23 @@ export function extractCallbackPref(note: string): string | null {
   return null;
 }
 
-export function extractFromNote(note: string): ExtractedData {
+export function extractFromNote(note: string, hasImage: boolean = false): ExtractedData {
+  const patientRef = extractPatientRef(note);
+  const requestType = extractRequestType(note);
+  const callbackPreference = extractCallbackPref(note);
+  let rawNote = note || '';
+  if (hasImage && !rawNote) {
+    rawNote = patientRef || requestType
+      ? '[Uploaded Photo]'
+      : '[Uploaded Photo: No clinical or prescription text detected]';
+  } else if (hasImage) {
+    rawNote = `${rawNote}\n\n[Uploaded Photo]`;
+  }
+
   return {
-    patientRef: extractPatientRef(note),
-    requestType: extractRequestType(note),
-    callbackPreference: extractCallbackPref(note),
-    rawNote: note || '',
+    patientRef,
+    requestType,
+    callbackPreference,
+    rawNote,
   };
 }

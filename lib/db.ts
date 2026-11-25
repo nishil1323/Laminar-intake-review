@@ -14,6 +14,7 @@ interface DraftRow {
   callback_preference: string | null;
   status: string;
   pms_reference: string | null;
+  image_url?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -38,6 +39,7 @@ function rowToDraft(row: DraftRow): Draft {
     callbackPreference: row.callback_preference,
     status: row.status as DraftStatus,
     pmsReference: row.pms_reference,
+    imageUrl: row.image_url || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -95,6 +97,7 @@ export function getDb(dbPathOverride?: string): Database.Database {
       callback_preference TEXT,
       status TEXT NOT NULL DEFAULT 'draft',
       pms_reference TEXT,
+      image_url TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -122,6 +125,12 @@ export function getDb(dbPathOverride?: string): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_drafts_submission_id ON drafts(submission_id);
   `);
 
+  try {
+    db.exec(`ALTER TABLE drafts ADD COLUMN image_url TEXT;`);
+  } catch {
+    // Column already exists
+  }
+
   globalForDb.db = db;
 
   return db;
@@ -143,12 +152,13 @@ export function insertDraft(draft: Omit<Draft, 'createdAt' | 'updatedAt'>): Draf
   const now = new Date().toISOString();
   const status = draft.status || 'draft';
   const pmsReference = draft.pmsReference || null;
+  const imageUrl = draft.imageUrl || null;
 
   const stmt = db.prepare(`
     INSERT INTO drafts (
       id, submission_id, raw_note, patient_ref, request_type,
-      callback_preference, status, pms_reference, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      callback_preference, status, pms_reference, image_url, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   stmt.run(
@@ -160,6 +170,7 @@ export function insertDraft(draft: Omit<Draft, 'createdAt' | 'updatedAt'>): Draf
     draft.callbackPreference ?? null,
     status,
     pmsReference,
+    imageUrl,
     now,
     now
   );
@@ -168,6 +179,7 @@ export function insertDraft(draft: Omit<Draft, 'createdAt' | 'updatedAt'>): Draf
     ...draft,
     status,
     pmsReference,
+    imageUrl,
     createdAt: now,
     updatedAt: now,
   };

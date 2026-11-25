@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Draft } from '@/lib/types';
 import StatusBadge from './StatusBadge';
 import {
@@ -14,6 +14,9 @@ import {
   FileQuestion,
   ShieldCheck,
   Sparkles,
+  Camera,
+  Maximize2,
+  X,
 } from 'lucide-react';
 
 export interface EditableFields {
@@ -74,6 +77,7 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({
   const isFormValid = !isPatientRefMissing && !isRequestTypeMissing;
   const isConfirmed = draft?.status === 'confirmed';
   const isAwaiting = draft?.status === 'awaiting_confirmation';
+  const [isEnlargedOpen, setIsEnlargedOpen] = useState<boolean>(false);
 
   if (!draft) {
     return (
@@ -130,15 +134,45 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({
 
       {/* Side-by-Side Review Section */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Left Column: Original Note */}
-        <div className="space-y-1.5">
+        {/* Left Column: Original Note & Prescription Photo */}
+        <div className="space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">
               Original Note (Verbatim)
             </span>
             <span className="text-[11px] text-slate-400 font-mono">read-only</span>
           </div>
-          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 whitespace-pre-wrap font-sans leading-relaxed min-h-[175px]">
+
+          {draft.imageUrl && (
+            <div
+              data-testid="review-prescription-image"
+              className="p-2.5 bg-blue-50/70 border border-blue-200 rounded-lg space-y-1.5"
+            >
+              <div className="flex items-center justify-between text-xs font-semibold text-blue-900">
+                <span className="flex items-center gap-1.5">
+                  <Camera className="w-3.5 h-3.5 text-blue-600" />
+                  Prescription Document Attached
+                </span>
+                <span className="text-[11px] text-blue-600 font-normal">Click to enlarge</span>
+              </div>
+              <div
+                onClick={() => setIsEnlargedOpen(true)}
+                className="relative cursor-pointer group rounded border border-blue-200 overflow-hidden bg-white max-h-36 flex items-center justify-center shadow-2xs"
+                title="Click to enlarge prescription image"
+              >
+                <img
+                  src={draft.imageUrl}
+                  alt="Prescription Document"
+                  className="max-h-36 w-auto object-contain group-hover:scale-105 transition-transform duration-200"
+                />
+                <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                  <Maximize2 className="w-4 h-4 text-white" />
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 whitespace-pre-wrap font-sans leading-relaxed min-h-[140px]">
             {draft.rawNote || '(Empty Note)'}
           </div>
         </div>
@@ -385,6 +419,37 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({
           )}
         </div>
       </div>
+
+      {/* Enlarged Image Preview Modal */}
+      {isEnlargedOpen && draft.imageUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4"
+          onClick={() => setIsEnlargedOpen(false)}
+        >
+          <div
+            className="bg-white rounded-xl overflow-hidden max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-2.5 bg-slate-900 text-white text-xs">
+              <span className="font-semibold">Prescription Document Preview</span>
+              <button
+                type="button"
+                onClick={() => setIsEnlargedOpen(false)}
+                className="p-1 rounded hover:bg-slate-800 text-slate-300 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-2 bg-slate-100 flex items-center justify-center overflow-auto max-h-[75vh]">
+              <img
+                src={draft.imageUrl}
+                alt="Enlarged prescription"
+                className="max-h-[70vh] w-auto object-contain rounded shadow-sm"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 };

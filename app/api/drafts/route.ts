@@ -51,6 +51,10 @@ export async function POST(request: Request) {
       typeof body.callbackPreference === 'string' && body.callbackPreference.trim().length > 0
         ? body.callbackPreference.trim()
         : null;
+    const imageUrl =
+      typeof body.imageUrl === 'string' && body.imageUrl.trim().length > 0
+        ? body.imageUrl.trim()
+        : null;
 
     const draft = insertDraft({
       id,
@@ -61,6 +65,7 @@ export async function POST(request: Request) {
       callbackPreference,
       status: 'draft',
       pmsReference: null,
+      imageUrl,
     });
 
     return NextResponse.json(draft, { status: 201 });

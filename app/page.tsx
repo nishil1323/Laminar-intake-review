@@ -8,9 +8,13 @@ import {
   LaminarProfileResponse,
 } from '@/lib/types';
 import { validateDraftApproval } from '@/lib/validation';
-import IntakePanel from './components/IntakePanel';
+import IntakePanel, { AttachedImage } from './components/IntakePanel';
 import ReviewPanel, { EditableFields } from './components/ReviewPanel';
 import LaminarProfile from './components/LaminarProfile';
+import {
+  getSamplePrescriptionDataUrl,
+  SAMPLE_PRESCRIPTION_BASE64,
+} from '@/lib/sample-prescription';
 import {
   Activity,
   RotateCcw,
@@ -41,6 +45,7 @@ export default function HomePage() {
   const [activePatientRef, setActivePatientRef] = useState<string | null>(null);
   const [laminarEntries, setLaminarEntries] = useState<LaminarProfileEntry[]>([]);
   const [extractorUsed, setExtractorUsed] = useState<'gemini' | 'mock' | undefined>(undefined);
+  const [attachedImage, setAttachedImage] = useState<AttachedImage | null>(null);
 
   // Loading states
   const [isExtracting, setIsExtracting] = useState<boolean>(false);
@@ -83,13 +88,30 @@ export default function HomePage() {
     }
   };
 
+  // Handler: Select Sample Prescription Photo
+  const handleSelectSamplePrescription = () => {
+    const dataUrl = getSamplePrescriptionDataUrl();
+    setNoteText('');
+    setAttachedImage({
+      data: SAMPLE_PRESCRIPTION_BASE64,
+      mimeType: 'image/svg+xml',
+      previewUrl: dataUrl,
+      fileName: 'Prescription_Rohit_Verma.svg',
+      fileSize: '3.2 KB',
+    });
+    setAlert({
+      type: 'info',
+      message: 'Sample prescription photo attached! Text input is locked to prevent conflicting patient data.',
+    });
+  };
+
   // Handler: Extract Draft (Step 1: Extract, Step 2: Create Draft)
   const handleExtractDraft = async () => {
     const trimmedNote = noteText.trim();
-    if (!trimmedNote) {
+    if (!trimmedNote && !attachedImage) {
       setAlert({
         type: 'warning',
-        message: 'Please enter an intake note or select a sample preset first.',
+        message: 'Please enter an intake note or upload/snap a prescription photo first.',
       });
       return;
     }
@@ -99,10 +121,18 @@ export default function HomePage() {
 
     try {
       // 1. Call POST /api/extract
+      const extractPayload: any = { note: trimmedNote };
+      if (attachedImage) {
+        extractPayload.image = {
+          data: attachedImage.data,
+          mimeType: attachedImage.mimeType,
+        };
+      }
+
       const extractRes = await fetch('/api/extract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ note: trimmedNote }),
+        body: JSON.stringify(extractPayload),
       });
 
       if (!extractRes.ok) {
@@ -118,10 +148,15 @@ export default function HomePage() {
       setExtractorUsed(extractedData.extractorUsed || 'mock');
 
       // 2. Call POST /api/drafts
+      const draftPayload = {
+        ...extractedData,
+        imageUrl: extractedData.imageUrl || attachedImage?.previewUrl || null,
+      };
+
       const draftRes = await fetch('/api/drafts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(extractedData),
+        body: JSON.stringify(draftPayload),
       });
 
       if (!draftRes.ok) {
@@ -140,6 +175,10 @@ export default function HomePage() {
         requestType: createdDraft.requestType ?? '',
         callbackPreference: createdDraft.callbackPreference ?? '',
       });
+
+      // Clear the intake form so subsequent intakes start clean with zero bleed-over
+      setNoteText('');
+      setAttachedImage(null);
 
       const targetPatient = createdDraft.patientRef?.trim() || null;
       setActivePatientRef(targetPatient);
@@ -349,6 +388,7 @@ export default function HomePage() {
   // Handler: Reset Demo
   const handleResetDemo = () => {
     setNoteText('');
+    setAttachedImage(null);
     setCurrentDraft(null);
     setEditableFields({
       patientRef: '',
@@ -466,10 +506,24 @@ export default function HomePage() {
             {/* Panel 1: Intake Panel */}
             <IntakePanel
               noteText={noteText}
-              onNoteChange={setNoteText}
+              onNoteChange={(text) => {
+                setNoteText(text);
+                if (text && attachedImage) {
+                  setAttachedImage(null);
+                }
+              }}
+              attachedImage={attachedImage}
+              onImageChange={(img) => {
+                setAttachedImage(img);
+                if (img) {
+                  setNoteText('');
+                }
+              }}
+              onSelectSamplePrescription={handleSelectSamplePrescription}
               onExtract={handleExtractDraft}
               onClear={() => {
                 setNoteText('');
+                setAttachedImage(null);
                 setAlert(null);
               }}
               isExtracting={isExtracting}

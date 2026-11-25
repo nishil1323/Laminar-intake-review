@@ -1,10 +1,11 @@
 'use client';
 
 import React from 'react';
-import { FileText, AlertTriangle } from 'lucide-react';
+import { FileText, AlertTriangle, FileImage } from 'lucide-react';
 
 export interface SampleNoteButtonsProps {
   onSelectSample: (noteText: string) => void;
+  onSelectSamplePrescription?: () => void;
   disabled?: boolean;
   className?: string;
 }
@@ -29,6 +30,7 @@ export const SAMPLE_NOTES = {
 
 export const SampleNoteButtons: React.FC<SampleNoteButtonsProps> = ({
   onSelectSample,
+  onSelectSamplePrescription,
   disabled = false,
   className = '',
 }) => {
@@ -58,6 +60,20 @@ export const SampleNoteButtons: React.FC<SampleNoteButtonsProps> = ({
         <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
         <span>{SAMPLE_NOTES.sample2.title}</span>
       </button>
+
+      {onSelectSamplePrescription && (
+        <button
+          type="button"
+          data-testid="sample-prescription-btn"
+          disabled={disabled}
+          onClick={onSelectSamplePrescription}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium text-purple-900 bg-purple-50 border border-purple-300 hover:bg-purple-100 active:bg-purple-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+          title="Loads a sample prescription photo for instant AI visual extraction"
+        >
+          <FileImage className="w-3.5 h-3.5 text-purple-600" />
+          <span>Sample 3: Prescription Photo</span>
+        </button>
+      )}
     </div>
   );
 };

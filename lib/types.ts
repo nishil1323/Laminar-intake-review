@@ -5,6 +5,7 @@ export interface ExtractedData {
   requestType: string | null;
   callbackPreference: string | null;
   rawNote: string;
+  imageUrl?: string | null;
 }
 
 export interface Draft {
@@ -16,6 +17,7 @@ export interface Draft {
   callbackPreference: string | null;
   status: DraftStatus;
   pmsReference: string | null;
+  imageUrl?: string | null;
   createdAt: string;
   updatedAt: string;
 }
