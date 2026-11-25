@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Draft,
   ExtractedData,
@@ -32,6 +32,8 @@ interface AlertState {
   details?: string[];
 }
 
+const STORAGE_KEY = 'laminar_intake_review_state_v1';
+
 export default function HomePage() {
   // State slices
   const [noteText, setNoteText] = useState<string>('');
@@ -46,6 +48,9 @@ export default function HomePage() {
   const [laminarEntries, setLaminarEntries] = useState<LaminarProfileEntry[]>([]);
   const [extractorUsed, setExtractorUsed] = useState<'gemini' | 'mock' | undefined>(undefined);
   const [attachedImage, setAttachedImage] = useState<AttachedImage | null>(null);
+
+  // Ref to track when initial restore is complete
+  const isRestored = useRef<boolean>(false);
 
   // Loading states
   const [isExtracting, setIsExtracting] = useState<boolean>(false);
@@ -87,6 +92,128 @@ export default function HomePage() {
       setIsProfileLoading(false);
     }
   };
+
+  // Restore application state from localStorage on browser reload
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    let isCancelled = false;
+
+    const restoreState = async () => {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (!saved) {
+          if (!isCancelled) {
+            isRestored.current = true;
+          }
+          return;
+        }
+
+        const parsed = JSON.parse(saved);
+
+        if (parsed.noteText && typeof parsed.noteText === 'string') {
+          setNoteText(parsed.noteText);
+        }
+        if (typeof parsed.simulateTimeout === 'boolean') {
+          setSimulateTimeout(parsed.simulateTimeout);
+        }
+        if (parsed.extractorUsed) {
+          setExtractorUsed(parsed.extractorUsed);
+        }
+
+        let restoredFields: EditableFields = {
+          patientRef: parsed.editableFields?.patientRef || '',
+          requestType: parsed.editableFields?.requestType || '',
+          callbackPreference: parsed.editableFields?.callbackPreference || '',
+        };
+
+        let activePatient = parsed.activePatientRef || restoredFields.patientRef;
+
+        if (parsed.currentDraftId) {
+          try {
+            const res = await fetch(`/api/drafts/${parsed.currentDraftId}`);
+            if (res.ok) {
+              const draft: Draft = await res.json();
+              if (!isCancelled && draft) {
+                setCurrentDraft(draft);
+
+                // Priority: user-edited localStorage fields first (if not blank),
+                // otherwise fallback to persisted draft fields from DB
+                restoredFields = {
+                  patientRef:
+                    (restoredFields.patientRef && restoredFields.patientRef.trim() !== '')
+                      ? restoredFields.patientRef
+                      : draft.patientRef || '',
+                  requestType:
+                    (restoredFields.requestType && restoredFields.requestType.trim() !== '')
+                      ? restoredFields.requestType
+                      : draft.requestType || '',
+                  callbackPreference:
+                    (restoredFields.callbackPreference && restoredFields.callbackPreference.trim() !== '')
+                      ? restoredFields.callbackPreference
+                      : draft.callbackPreference || '',
+                };
+
+                if (draft.patientRef) {
+                  activePatient = draft.patientRef;
+                }
+
+                if (draft.rawNote && !parsed.noteText) {
+                  setNoteText(draft.rawNote);
+                }
+              }
+            }
+          } catch (fetchErr) {
+            console.warn('Failed to restore draft on reload:', fetchErr);
+          }
+        }
+
+        if (!isCancelled) {
+          setEditableFields(restoredFields);
+          if (activePatient) {
+            setActivePatientRef(activePatient);
+            await fetchLaminarProfile(activePatient);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to restore state from localStorage:', e);
+      } finally {
+        if (!isCancelled) {
+          // Delay marking restored to ensure all setState calls have flushed and re-rendered,
+          // avoiding premature writes of initial empty state to localStorage
+          setTimeout(() => {
+            if (!isCancelled) {
+              isRestored.current = true;
+            }
+          }, 100);
+        }
+      }
+    };
+
+    restoreState();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
+  // Persist application state to localStorage on changes (after initial restoration)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !isRestored.current) return;
+    try {
+      const stateToSave = {
+        noteText,
+        currentDraftId: currentDraft?.id || null,
+        editableFields,
+        activePatientRef,
+        simulateTimeout,
+        extractorUsed,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
+    } catch (e) {
+      console.error('Failed to save state to localStorage:', e);
+    }
+  }, [noteText, currentDraft, editableFields, activePatientRef, simulateTimeout, extractorUsed]);
 
   // Handler: Select Sample Prescription Photo
   const handleSelectSamplePrescription = () => {
@@ -387,6 +514,14 @@ export default function HomePage() {
 
   // Handler: Reset Demo
   const handleResetDemo = () => {
+    isRestored.current = false;
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch (e) {
+        // ignore
+      }
+    }
     setNoteText('');
     setAttachedImage(null);
     setCurrentDraft(null);
@@ -404,6 +539,9 @@ export default function HomePage() {
     setIsApproving(false);
     setIsVerifying(false);
     setIsProfileLoading(false);
+    setTimeout(() => {
+      isRestored.current = true;
+    }, 100);
   };
 
   return (

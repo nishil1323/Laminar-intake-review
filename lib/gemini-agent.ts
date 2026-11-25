@@ -109,7 +109,7 @@ export async function extractWithAgent(
         patientRef: l2Cached.patientRef,
         requestType: l2Cached.requestType,
         callbackPreference: l2Cached.callbackPreference,
-        rawNote: note,
+        rawNote: note || (cleanImageData ? '[Uploaded Prescription Document]' : ''),
         imageUrl: cleanImageData ? `data:${imageMimeType};base64,${cleanImageData}` : null,
         extractorUsed: l2Cached.extractorUsed,
       };

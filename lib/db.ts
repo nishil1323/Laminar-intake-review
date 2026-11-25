@@ -187,8 +187,8 @@ export function insertDraft(draft: Omit<Draft, 'createdAt' | 'updatedAt'>): Draf
 
 export function getDraftById(id: string): Draft | null {
   const db = getDb();
-  const stmt = db.prepare('SELECT * FROM drafts WHERE id = ?');
-  const row = stmt.get(id) as DraftRow | undefined;
+  const stmt = db.prepare('SELECT * FROM drafts WHERE id = ? OR submission_id = ?');
+  const row = stmt.get(id, id) as DraftRow | undefined;
   return row ? rowToDraft(row) : null;
 }
 

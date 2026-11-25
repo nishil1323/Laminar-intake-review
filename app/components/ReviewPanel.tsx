@@ -173,7 +173,11 @@ export const ReviewPanel: React.FC<ReviewPanelProps> = ({
           )}
 
           <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700 whitespace-pre-wrap font-sans leading-relaxed min-h-[140px]">
-            {draft.rawNote || '(Empty Note)'}
+            {draft.rawNote && draft.rawNote.trim() !== ''
+              ? draft.rawNote
+              : draft.imageUrl
+              ? '[Uploaded Prescription Document]'
+              : '(Empty Note)'}
           </div>
         </div>
 
