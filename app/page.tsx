@@ -323,6 +323,29 @@ export default function HomePage() {
     }
   };
 
+  // Handler: Select draft from Laminar Profile timeline
+  const handleSelectDraft = async (draftId: string) => {
+    try {
+      const res = await fetch(`/api/drafts/${draftId}`);
+      if (res.ok) {
+        const draft: Draft = await res.json();
+        setCurrentDraft(draft);
+        setNoteText(draft.rawNote || '');
+        setEditableFields({
+          patientRef: draft.patientRef ?? '',
+          requestType: draft.requestType ?? '',
+          callbackPreference: draft.callbackPreference ?? '',
+        });
+        setAlert({
+          type: 'info',
+          message: `Loaded submission ${draft.submissionId} into Review & Approve.`,
+        });
+      }
+    } catch (err) {
+      console.error('Failed to select draft:', err);
+    }
+  };
+
   // Handler: Reset Demo
   const handleResetDemo = () => {
     setNoteText('');
@@ -475,6 +498,8 @@ export default function HomePage() {
                 patientRef={activePatientRef}
                 entries={laminarEntries}
                 isLoading={isProfileLoading}
+                selectedDraftId={currentDraft?.id}
+                onSelectDraft={handleSelectDraft}
                 onRefresh={() => {
                   if (activePatientRef) {
                     fetchLaminarProfile(activePatientRef);

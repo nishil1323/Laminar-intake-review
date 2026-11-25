@@ -26,12 +26,14 @@ export function extractPatientRef(note: string): string | null {
     }
   }
 
-  // Check name at start: e.g. "Nishil needs callback at 3"
-  const nameMatch = note.trim().match(/^([A-Za-z][A-Za-z0-9_-]*)\s+(?:needs|wants|requests|asks)/i);
+  // Check name at start: e.g. "Nishil needs callback at 3" or shorthand "Aniha 4 pm callback"
+  const nameMatch = note.trim().match(/^([A-Za-z][A-Za-z0-9_-]*)\b/);
   if (nameMatch) {
     const candidate = nameMatch[1].trim();
-    if (!/^(I|Caller|Patient|Patnt|Pt|Someone)$/i.test(candidate)) {
-      return candidate;
+    if (!/^(I|Caller|Patient|Patnt|Pt|Someone|Prescription|Refill|Transfer|Callback|Best|Preferred|Please|Yesterday|Today|Tomorrow)$/i.test(candidate)) {
+      if (/\b(?:needs|wants|requests|asks|\d+\s*(?:am|pm|[ap]\.m\.)|callback|refill|transfer)\b/i.test(note)) {
+        return candidate;
+      }
     }
   }
 
@@ -73,6 +75,12 @@ export function extractCallbackPref(note: string): string | null {
       val = val + '.';
     }
     if (val.length > 0) return val;
+  }
+
+  // Check standalone time like "4 pm", "4:30 pm", "4pm", "4 a.m."
+  const standaloneTime = note.match(/\b(\d{1,2}(?::\d{2})?\s*(?:[ap]\.?m\.?|pm|am))\b/i);
+  if (standaloneTime) {
+    return standaloneTime[1].trim();
   }
 
   // Check standalone "at 3"

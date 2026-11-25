@@ -15,6 +15,8 @@ export interface LaminarProfileProps {
   patientRef: string | null;
   entries: LaminarProfileEntry[];
   isLoading: boolean;
+  selectedDraftId?: string | null;
+  onSelectDraft?: (draftId: string) => void;
   onRefresh?: () => void;
   className?: string;
 }
@@ -23,6 +25,8 @@ export const LaminarProfile: React.FC<LaminarProfileProps> = ({
   patientRef,
   entries,
   isLoading,
+  selectedDraftId,
+  onSelectDraft,
   onRefresh,
   className = '',
 }) => {
@@ -100,67 +104,93 @@ export const LaminarProfile: React.FC<LaminarProfileProps> = ({
           </div>
 
           <div className="space-y-3">
-            {entries.map((entry) => (
-              <div
-                key={entry.draftId || entry.submissionId}
-                data-testid="profile-entry-card"
-                className="border border-slate-200 rounded-lg p-3.5 bg-slate-50/60 hover:bg-slate-50 transition-colors shadow-xs space-y-2"
-              >
-                {/* Card Top: Submission ID & Status Badge */}
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <span className="text-[11px] text-slate-500 uppercase tracking-wider block font-semibold">
-                      Submission ID
-                    </span>
-                    <span className="font-mono text-xs text-slate-700 truncate block">
-                      {entry.submissionId}
-                    </span>
-                  </div>
-                  <StatusBadge status={entry.status} size="sm" />
-                </div>
-
-                {/* Card Body: Request Type & Callback */}
-                <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-slate-200/60">
-                  <div>
-                    <span className="text-slate-500 block">Request Type:</span>
-                    <span className="font-semibold text-slate-800 capitalize">
-                      {entry.requestType || 'None'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block">Callback Pref:</span>
-                    <span className="text-slate-700">
-                      {entry.callbackPreference || 'None'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Card Footer: PMS Ref & Timestamp */}
-                <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-xs">
-                  <div>
-                    {entry.pmsReference ? (
-                      <div className="flex items-center gap-1">
-                        <span className="text-slate-500 text-[11px]">PMS Ref:</span>
-                        <span
-                          data-testid="pms-reference-badge"
-                          className="font-mono font-bold text-emerald-800 bg-emerald-100 border border-emerald-200 px-1.5 py-0.5 rounded text-[11px]"
-                        >
-                          {entry.pmsReference}
+            {entries.map((entry) => {
+              const isSelected = Boolean(selectedDraftId && entry.draftId === selectedDraftId);
+              return (
+                <div
+                  key={entry.draftId || entry.submissionId}
+                  data-testid="profile-entry-card"
+                  onClick={() => onSelectDraft?.(entry.draftId)}
+                  role={onSelectDraft ? 'button' : undefined}
+                  tabIndex={onSelectDraft ? 0 : undefined}
+                  onKeyDown={(e) => {
+                    if (onSelectDraft && (e.key === 'Enter' || e.key === ' ')) {
+                      e.preventDefault();
+                      onSelectDraft(entry.draftId);
+                    }
+                  }}
+                  title={onSelectDraft ? 'Click to load and review this draft in Panel 2' : undefined}
+                  className={`border rounded-lg p-3.5 transition-all shadow-xs space-y-2 text-left ${
+                    onSelectDraft ? 'cursor-pointer hover:shadow-sm' : ''
+                  } ${
+                    isSelected
+                      ? 'border-blue-500 bg-blue-50/60 ring-2 ring-blue-500/20'
+                      : 'border-slate-200 bg-slate-50/60 hover:bg-slate-100 hover:border-slate-300'
+                  }`}
+                >
+                  {/* Card Top: Submission ID & Status Badge */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] text-slate-500 uppercase tracking-wider block font-semibold">
+                          Submission ID
                         </span>
+                        {isSelected && (
+                          <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-1.5 py-0.2 rounded">
+                            Active in Review
+                          </span>
+                        )}
                       </div>
-                    ) : (
-                      <span className="text-orange-600 italic text-[11px]">
-                        Pending verification...
+                      <span className="font-mono text-xs text-slate-700 truncate block">
+                        {entry.submissionId}
                       </span>
-                    )}
+                    </div>
+                    <StatusBadge status={entry.status} size="sm" />
                   </div>
-                  <div className="text-[11px] text-slate-400 flex items-center gap-1">
-                    <Calendar className="w-3 h-3" />
-                    <span>{entry.updatedAt ? new Date(entry.updatedAt).toLocaleTimeString() : 'Just now'}</span>
+
+                  {/* Card Body: Request Type & Callback */}
+                  <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-slate-200/60">
+                    <div>
+                      <span className="text-slate-500 block">Request Type:</span>
+                      <span className="font-semibold text-slate-800 capitalize">
+                        {entry.requestType || 'None'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block">Callback Pref:</span>
+                      <span className="text-slate-700">
+                        {entry.callbackPreference || 'None'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Card Footer: PMS Ref & Timestamp */}
+                  <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-xs">
+                    <div>
+                      {entry.pmsReference ? (
+                        <div className="flex items-center gap-1">
+                          <span className="text-slate-500 text-[11px]">PMS Ref:</span>
+                          <span
+                            data-testid="pms-reference-badge"
+                            className="font-mono font-bold text-emerald-800 bg-emerald-100 border border-emerald-200 px-1.5 py-0.5 rounded text-[11px]"
+                          >
+                            {entry.pmsReference}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-orange-600 italic text-[11px]">
+                          Pending verification...
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-slate-400 flex items-center gap-1">
+                      <Calendar className="w-3 h-3" />
+                      <span>{entry.updatedAt ? new Date(entry.updatedAt).toLocaleTimeString() : 'Just now'}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

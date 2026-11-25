@@ -1,9 +1,18 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { ExtractedData } from './types';
 import { extractFromNote as fallbackMockExtract } from './mock-agent';
+import { getCachedExtraction, setCachedExtraction } from './db';
 
 export interface AgentExtractionResult extends ExtractedData {
   extractorUsed: 'gemini' | 'mock';
+}
+
+// L1 In-Memory Cache (sub-millisecond lookups, 0 tokens)
+const memoryCache = new Map<string, AgentExtractionResult>();
+
+function normalizeCacheKey(note: string): string {
+  if (!note || typeof note !== 'string') return '';
+  return note.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
 function normalizePatientRef(raw: any): string | null {
@@ -34,13 +43,49 @@ function normalizePatientRef(raw: any): string | null {
 }
 
 export async function extractWithAgent(note: string): Promise<AgentExtractionResult> {
+  const cacheKey = normalizeCacheKey(note);
   const apiKey = process.env.GEMINI_API_KEY;
 
+  // 1. Check L1 In-Memory Cache (0ms latency, 0 tokens)
+  if (cacheKey && memoryCache.has(cacheKey)) {
+    const cached = memoryCache.get(cacheKey)!;
+    // If API key is present, only accept cache if it was extracted by Gemini
+    if (!apiKey || cached.extractorUsed === 'gemini') {
+      console.log(`[ExtractionCache] L1 In-Memory HIT for "${cacheKey.slice(0, 35)}..." (0 tokens used)`);
+      return {
+        ...cached,
+        rawNote: note,
+      };
+    }
+  }
+
+  // 2. Check L2 SQLite Persistent Cache (survives dev server restarts, 0 tokens)
+  if (cacheKey) {
+    const l2Cached = getCachedExtraction(cacheKey);
+    if (l2Cached && (!apiKey || l2Cached.extractorUsed === 'gemini')) {
+      console.log(`[ExtractionCache] L2 SQLite HIT for "${cacheKey.slice(0, 35)}..." (0 tokens used)`);
+      const result: AgentExtractionResult = {
+        patientRef: l2Cached.patientRef,
+        requestType: l2Cached.requestType,
+        callbackPreference: l2Cached.callbackPreference,
+        rawNote: note,
+        extractorUsed: l2Cached.extractorUsed,
+      };
+      memoryCache.set(cacheKey, result);
+      return result;
+    }
+  }
+
   if (!apiKey || apiKey.trim() === '') {
-    return {
+    const mockResult: AgentExtractionResult = {
       ...fallbackMockExtract(note),
       extractorUsed: 'mock',
     };
+    if (cacheKey) {
+      memoryCache.set(cacheKey, mockResult);
+      setCachedExtraction(cacheKey, mockResult);
+    }
+    return mockResult;
   }
 
   try {
@@ -98,10 +143,10 @@ ${note}
           },
         });
 
-        // Hard timeout per model call at 5000ms to guarantee snappy sub-6s UI response
+        // Timeout per model call at 7500ms to allow sufficient time for model inference
         let timeoutHandle: any;
         const timeoutPromise = new Promise<never>((_, reject) => {
-          timeoutHandle = setTimeout(() => reject(new Error(`Timeout exceeding 5000ms for ${modelName}`)), 5000);
+          timeoutHandle = setTimeout(() => reject(new Error(`Timeout exceeding 7500ms for ${modelName}`)), 7500);
         });
 
         const result: any = await Promise.race([
@@ -123,15 +168,23 @@ ${note}
 
     const parsed = JSON.parse(responseText);
 
-    return {
+    const result: AgentExtractionResult = {
       patientRef: normalizePatientRef(parsed.patientRef),
       requestType: parsed.requestType ? String(parsed.requestType).trim().toLowerCase() : null,
       callbackPreference: parsed.callbackPreference ? String(parsed.callbackPreference).trim() : null,
       rawNote: note,
       extractorUsed: 'gemini',
     };
+
+    if (cacheKey) {
+      memoryCache.set(cacheKey, result);
+      setCachedExtraction(cacheKey, result);
+    }
+
+    return result;
   } catch (err) {
     console.warn('[GeminiAgent] Call failed or timed out, falling back to mock agent:', err);
+    // Return mock fallback for this request, but DO NOT poison the cache with failure fallbacks
     return {
       ...fallbackMockExtract(note),
       extractorUsed: 'mock',

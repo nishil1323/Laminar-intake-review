@@ -109,6 +109,15 @@ export function getDb(dbPathOverride?: string): Database.Database {
       created_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS extraction_cache (
+      cache_key TEXT PRIMARY KEY,
+      patient_ref TEXT,
+      request_type TEXT,
+      callback_preference TEXT,
+      extractor_used TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_drafts_patient_ref ON drafts(patient_ref);
     CREATE INDEX IF NOT EXISTS idx_drafts_submission_id ON drafts(submission_id);
   `);
@@ -290,3 +299,61 @@ export function insertOrGetPmsEntry(
   }
   return result;
 }
+
+export function getCachedExtraction(cacheKey: string): {
+  patientRef: string | null;
+  requestType: string | null;
+  callbackPreference: string | null;
+  extractorUsed: 'gemini' | 'mock';
+} | null {
+  try {
+    const db = getDb();
+    const row = db
+      .prepare('SELECT patient_ref, request_type, callback_preference, extractor_used FROM extraction_cache WHERE cache_key = ?')
+      .get(cacheKey) as any;
+    if (!row) return null;
+    return {
+      patientRef: row.patient_ref ?? null,
+      requestType: row.request_type ?? null,
+      callbackPreference: row.callback_preference ?? null,
+      extractorUsed: row.extractor_used as 'gemini' | 'mock',
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function setCachedExtraction(
+  cacheKey: string,
+  data: {
+    patientRef: string | null;
+    requestType: string | null;
+    callbackPreference: string | null;
+    extractorUsed: 'gemini' | 'mock';
+  }
+): void {
+  try {
+    const db = getDb();
+    const stmt = db.prepare(`
+      INSERT INTO extraction_cache (cache_key, patient_ref, request_type, callback_preference, extractor_used, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(cache_key) DO UPDATE SET
+        patient_ref = excluded.patient_ref,
+        request_type = excluded.request_type,
+        callback_preference = excluded.callback_preference,
+        extractor_used = excluded.extractor_used,
+        created_at = excluded.created_at
+    `);
+    stmt.run(
+      cacheKey,
+      data.patientRef ?? null,
+      data.requestType ?? null,
+      data.callbackPreference ?? null,
+      data.extractorUsed,
+      new Date().toISOString()
+    );
+  } catch {
+    // Non-critical, ignore write errors
+  }
+}
+
