@@ -6,6 +6,33 @@ export interface AgentExtractionResult extends ExtractedData {
   extractorUsed: 'gemini' | 'mock';
 }
 
+function normalizePatientRef(raw: any): string | null {
+  if (!raw || typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  const lower = trimmed.toLowerCase();
+  if (
+    !trimmed ||
+    lower === 'null' ||
+    lower === 'undefined' ||
+    lower === 'i' ||
+    lower === 'me' ||
+    lower === 'my' ||
+    lower === 'myself' ||
+    lower === 'caller' ||
+    lower === 'anonymous' ||
+    lower === 'someone' ||
+    lower === 'unknown' ||
+    lower === 'none'
+  ) {
+    return null;
+  }
+  // Standardize patient IDs with hyphens (e.g. DEMO-101) to uppercase
+  if (/^[A-Za-z]+-\d+$/i.test(trimmed)) {
+    return trimmed.toUpperCase();
+  }
+  return trimmed;
+}
+
 export async function extractWithAgent(note: string): Promise<AgentExtractionResult> {
   const apiKey = process.env.GEMINI_API_KEY;
 
@@ -18,19 +45,39 @@ export async function extractWithAgent(note: string): Promise<AgentExtractionRes
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey.trim());
-    // Prioritize low-latency models (gemini-3.5-flash-lite takes ~1.5s vs 17s+ for standard flash)
-    const candidateModels = ['gemini-3.5-flash-lite', 'gemini-3.5-flash'];
+    // Prioritize low-latency models (gemini-3.5-flash-lite takes ~1s) with automatic fallbacks
+    const candidateModels = ['gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-3.7-flash'];
     
     let responseText: string | null = null;
     let lastError: any = null;
 
-    const prompt = `You are a clinical pharmacy intake extraction agent.
-Analyze the following free-text clinical intake note and extract three fields into a JSON object:
-1. "patientRef": string or null (e.g. "DEMO-101"). Must be the patient identifier or reference. If no patient reference or identifier is mentioned, return null.
-2. "requestType": string or null (e.g. "callback", "refill", "transfer"). If not specified, return null.
-3. "callbackPreference": string or null (e.g. "after 3 p.m.", "morning"). If no time or callback preference is specified, return null.
+    const prompt = `You are an expert clinical pharmacy intake AI agent acting as a smart human receptionist.
+Analyze the following free-text, shorthand, conversational, or voice-transcribed clinical intake note. Notes may contain misspellings (e.g. 'Patnt'), informal times, or casual speech.
 
-Return ONLY a JSON object with this exact shape:
+Extract 3 structured fields:
+
+1. "patientRef": (string or null)
+   - The patient identifier (e.g. "DEMO-101") or the patient's actual name (e.g. "bittu", "Nishil").
+   - Understand typos like 'Patnt', 'pt', 'patient', 'mr.', 'mrs.'.
+   - CRITICAL RULE: If the note uses first-person pronouns like "I", "me", "my" without specifying a name (e.g. "I needs callback at 3"), or refers to an anonymous/generic caller (e.g. "Caller asks for..."), return null. "I", "Caller", "Someone" are NOT patient names.
+   - If an alphanumeric code with hyphen (like "DEMO-101") is provided, format in uppercase. If a person's name (like "bittu" or "Nishil") is provided, preserve the name.
+
+2. "requestType": (string or null)
+   - Category in lowercase: "callback", "refill", "transfer", "consultation", etc.
+   - Understand natural language: "wants callback", "needs callback", "call back" -> "callback". "prescription refill for lisinopril", "refil" -> "refill". "transfer rx" -> "transfer".
+
+3. "callbackPreference": (string or null)
+   - The preferred callback time or time window.
+   - Smartly interpret informal time descriptions:
+     * "3 evening" or "3 in the evening" -> "3 PM"
+     * "at 3" (without am/pm) -> "3"
+     * "after 3 p.m." -> "after 3 p.m."
+     * "morning" or "prefers morning callback" -> "morning"
+     * "afternoon" -> "afternoon"
+     * "evening" -> "evening"
+   - If no time preference is stated, return null.
+
+Return ONLY a JSON object:
 {
   "patientRef": string | null,
   "requestType": string | null,
@@ -77,7 +124,7 @@ ${note}
     const parsed = JSON.parse(responseText);
 
     return {
-      patientRef: parsed.patientRef ? String(parsed.patientRef).trim().toUpperCase() : null,
+      patientRef: normalizePatientRef(parsed.patientRef),
       requestType: parsed.requestType ? String(parsed.requestType).trim().toLowerCase() : null,
       callbackPreference: parsed.callbackPreference ? String(parsed.callbackPreference).trim() : null,
       rawNote: note,

@@ -2,8 +2,40 @@ import { ExtractedData } from './types';
 
 export function extractPatientRef(note: string): string | null {
   if (!note || typeof note !== 'string') return null;
-  const match = note.match(/Patient\s+([A-Za-z0-9]+(?:-[A-Za-z0-9]+)+)/i);
-  return match ? match[1].toUpperCase() : null;
+
+  // Check code format: e.g. "Patient DEMO-101" or "patnt DEMO-101"
+  const idMatch = note.match(/(?:Patient|Patnt|pt)\s+([A-Za-z0-9]+(?:-[A-Za-z0-9]+)+)/i);
+  if (idMatch) return idMatch[1].toUpperCase();
+
+  // Check first person pronouns: "I needs...", "I want..." -> null (no patient name)
+  if (/^I\s+(?:needs|wants|requests|asks|prefer)/i.test(note.trim())) {
+    return null;
+  }
+
+  // Check generic caller: "Caller asks..." -> null
+  if (/^Caller\s+/i.test(note.trim())) {
+    return null;
+  }
+
+  // Check typo prefix: e.g. "Patnt bittu" or "Patient John"
+  const typoMatch = note.match(/(?:Patient|Patnt|pt)\s+([A-Za-z0-9]+)/i);
+  if (typoMatch) {
+    const name = typoMatch[1].trim();
+    if (!/^(null|undefined|caller|unknown|none|request|requests|wants|needs)$/i.test(name)) {
+      return name;
+    }
+  }
+
+  // Check name at start: e.g. "Nishil needs callback at 3"
+  const nameMatch = note.trim().match(/^([A-Za-z][A-Za-z0-9_-]*)\s+(?:needs|wants|requests|asks)/i);
+  if (nameMatch) {
+    const candidate = nameMatch[1].trim();
+    if (!/^(I|Caller|Patient|Patnt|Pt|Someone)$/i.test(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
 }
 
 export function extractRequestType(note: string): string | null {
@@ -11,30 +43,45 @@ export function extractRequestType(note: string): string | null {
   // Check refill and transfer before callback fallback
   if (/refill/i.test(note)) return 'refill';
   if (/transfer/i.test(note)) return 'transfer';
-  if (/callback/i.test(note)) return 'callback';
+  if (/call\s*back|callback/i.test(note)) return 'callback';
   return null;
 }
 
 export function extractCallbackPref(note: string): string | null {
   if (!note || typeof note !== 'string') return null;
 
+  // Check informal times like "at 3 evening" -> "3 PM"
+  const eveningMatch = note.match(/(?:at|after|before)\s+(\d+)\s+evening/i);
+  if (eveningMatch) {
+    return `${eveningMatch[1]} PM`;
+  }
+
+  // Check informal times like "at 3 morning" -> "3 AM"
+  const morningMatch = note.match(/(?:at|after|before)\s+(\d+)\s+morning/i);
+  if (morningMatch) {
+    return `${morningMatch[1]} AM`;
+  }
+
   // Match phrases like "Best time is after 3 p.m.", "Prefers morning callback", "Preferred time: morning"
   const prefMatch = note.match(
     /(?:best time|preferred\s+time|preferred?|prefers?|after|before)[:\s]+(?:is\s+)?(.+?)(?:\.(?:\s|$)|$)/i
   );
-  if (!prefMatch) return null;
-
-  let val = prefMatch[1].trim();
-
-  // Strip trailing "callback" word if present (e.g. "morning callback" -> "morning")
-  val = val.replace(/\s+callback$/i, '').trim();
-
-  // If the value ended before the trailing period in "p.m." or "a.m.", restore it cleanly
-  if (/[ap]\.m$/i.test(val)) {
-    val = val + '.';
+  if (prefMatch) {
+    let val = prefMatch[1].trim();
+    val = val.replace(/\s+callback$/i, '').trim();
+    if (/[ap]\.m$/i.test(val)) {
+      val = val + '.';
+    }
+    if (val.length > 0) return val;
   }
 
-  return val.length > 0 ? val : null;
+  // Check standalone "at 3"
+  const atMatch = note.match(/\bat\s+(\d+(?::\d+)?)\b/i);
+  if (atMatch) {
+    return atMatch[1];
+  }
+
+  return null;
 }
 
 export function extractFromNote(note: string): ExtractedData {
