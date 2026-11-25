@@ -113,5 +113,15 @@ describe('Mock Agent Extraction', () => {
     assert.strictEqual(case3.patientRef, 'Nishil');
     assert.strictEqual(case3.requestType, 'callback');
     assert.strictEqual(case3.callbackPreference, '3');
+
+    // Case 4: "Nishil wants callback at 3 mornig" -> "3 AM"
+    const case4 = extractFromNote('Nishil wants callback at 3 mornig');
+    assert.strictEqual(case4.patientRef, 'Nishil');
+    assert.strictEqual(case4.requestType, 'callback');
+    assert.strictEqual(case4.callbackPreference, '3 AM');
+
+    // Case 5: "3 morning" / "3 in the morning" -> "3 AM"
+    const case5 = extractFromNote('Patient John callback 3 morning');
+    assert.strictEqual(case5.callbackPreference, '3 AM');
   });
 });

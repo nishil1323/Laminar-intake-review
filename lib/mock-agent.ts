@@ -52,19 +52,49 @@ export function extractRequestType(note: string): string | null {
 export function extractCallbackPref(note: string): string | null {
   if (!note || typeof note !== 'string') return null;
 
-  // Check informal times like "at 3 evening" -> "3 PM"
-  const eveningMatch = note.match(/(?:at|after|before)\s+(\d+)\s+evening/i);
-  if (eveningMatch) {
-    return `${eveningMatch[1]} PM`;
+  // 1. Check informal times with morning/mornig/moring/mrng:
+  // e.g. "at 3 mornig", "3 morning", "after 3 morning", "before 3 morning", "3 in the morning" -> "3 AM", "after 3 AM", "before 3 AM"
+  const morningWithTime = note.match(
+    /\b(?:(after|before|at)\s+)?(\d{1,2}(?::\d{2})?)\s*(?:in\s+(?:the\s+)?)?(?:morn(?:ing|ig)?|mrng|moring)\b/i
+  );
+  if (morningWithTime) {
+    const prefix = morningWithTime[1] ? morningWithTime[1].toLowerCase() : '';
+    const time = morningWithTime[2];
+    if (prefix === 'after') return `after ${time} AM`;
+    if (prefix === 'before') return `before ${time} AM`;
+    return `${time} AM`;
   }
 
-  // Check informal times like "at 3 morning" -> "3 AM"
-  const morningMatch = note.match(/(?:at|after|before)\s+(\d+)\s+morning/i);
-  if (morningMatch) {
-    return `${morningMatch[1]} AM`;
+  // Also check reverse order: "morning at 3"
+  const morningReverse = note.match(
+    /\b(?:in\s+(?:the\s+)?)?(?:morn(?:ing|ig)?|mrng|moring)\s+(?:at\s+|after\s+|before\s+)?(\d{1,2}(?::\d{2})?)\b/i
+  );
+  if (morningReverse) {
+    return `${morningReverse[1]} AM`;
   }
 
-  // Match phrases like "Best time is after 3 p.m.", "Prefers morning callback", "Preferred time: morning"
+  // 2. Check informal times with evening/night/afternoon:
+  // e.g. "at 3 evening", "3 night", "after 4 evening", "3 in the evening" -> "3 PM", "after 4 PM"
+  const eveningWithTime = note.match(
+    /\b(?:(after|before|at)\s+)?(\d{1,2}(?::\d{2})?)\s*(?:in\s+(?:the\s+)?)?(?:evening|eve|night|nite|afternoon|noon)\b/i
+  );
+  if (eveningWithTime) {
+    const prefix = eveningWithTime[1] ? eveningWithTime[1].toLowerCase() : '';
+    const time = eveningWithTime[2];
+    if (prefix === 'after') return `after ${time} PM`;
+    if (prefix === 'before') return `before ${time} PM`;
+    return `${time} PM`;
+  }
+
+  // Also check reverse order: "evening at 3", "night at 10"
+  const eveningReverse = note.match(
+    /\b(?:in\s+(?:the\s+)?)?(?:evening|eve|night|nite|afternoon|noon)\s+(?:at\s+|after\s+|before\s+)?(\d{1,2}(?::\d{2})?)\b/i
+  );
+  if (eveningReverse) {
+    return `${eveningReverse[1]} PM`;
+  }
+
+  // 3. Match phrases like "Best time is after 3 p.m.", "Prefers morning callback", "Preferred time: morning"
   const prefMatch = note.match(
     /(?:best time|preferred\s+time|preferred?|prefers?|after|before)[:\s]+(?:is\s+)?(.+?)(?:\.(?:\s|$)|$)/i
   );
@@ -77,13 +107,13 @@ export function extractCallbackPref(note: string): string | null {
     if (val.length > 0) return val;
   }
 
-  // Check standalone time like "4 pm", "4:30 pm", "4pm", "4 a.m."
+  // 4. Check standalone time like "4 pm", "4:30 pm", "4pm", "4 a.m."
   const standaloneTime = note.match(/\b(\d{1,2}(?::\d{2})?\s*(?:[ap]\.?m\.?|pm|am))\b/i);
   if (standaloneTime) {
     return standaloneTime[1].trim();
   }
 
-  // Check standalone "at 3"
+  // 5. Check standalone "at 3"
   const atMatch = note.match(/\bat\s+(\d+(?::\d+)?)\b/i);
   if (atMatch) {
     return atMatch[1];

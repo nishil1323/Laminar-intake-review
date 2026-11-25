@@ -65,6 +65,51 @@ function normalizeRequestType(raw: any): string | null {
   return trimmed;
 }
 
+function normalizeCallbackPreference(raw: any, note: string): string | null {
+  const noteText = note || '';
+
+  // 1. Check if note or raw extracted text has time with morning (including typos like mornig, mrng, moring)
+  const morningMatch =
+    noteText.match(/\b(?:(after|before|at)\s+)?(\d{1,2}(?::\d{2})?)\s*(?:in\s+(?:the\s+)?)?(?:morn(?:ing|ig)?|mrng|moring)\b/i) ||
+    (typeof raw === 'string' && raw.match(/\b(?:(after|before|at)\s+)?(\d{1,2}(?::\d{2})?)\s*(?:in\s+(?:the\s+)?)?(?:morn(?:ing|ig)?|mrng|moring)\b/i));
+
+  if (morningMatch) {
+    const prefix = morningMatch[1] ? morningMatch[1].toLowerCase() : '';
+    const time = morningMatch[2];
+    if (prefix === 'after') return `after ${time} AM`;
+    if (prefix === 'before') return `before ${time} AM`;
+    return `${time} AM`;
+  }
+
+  // 2. Check if note or raw extracted text has time with evening/night/afternoon
+  const eveningMatch =
+    noteText.match(/\b(?:(after|before|at)\s+)?(\d{1,2}(?::\d{2})?)\s*(?:in\s+(?:the\s+)?)?(?:evening|eve|night|nite|afternoon|noon)\b/i) ||
+    (typeof raw === 'string' && raw.match(/\b(?:(after|before|at)\s+)?(\d{1,2}(?::\d{2})?)\s*(?:in\s+(?:the\s+)?)?(?:evening|eve|night|nite|afternoon|noon)\b/i));
+
+  if (eveningMatch) {
+    const prefix = eveningMatch[1] ? eveningMatch[1].toLowerCase() : '';
+    const time = eveningMatch[2];
+    if (prefix === 'after') return `after ${time} PM`;
+    if (prefix === 'before') return `before ${time} PM`;
+    return `${time} PM`;
+  }
+
+  if (raw && typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (
+      !trimmed ||
+      trimmed.toLowerCase() === 'null' ||
+      trimmed.toLowerCase() === 'undefined' ||
+      trimmed.toLowerCase() === 'none'
+    ) {
+      return null;
+    }
+    return trimmed;
+  }
+
+  return null;
+}
+
 export async function extractWithAgent(
   note: string,
   image?: { data: string; mimeType: string }
@@ -163,10 +208,11 @@ Extract 3 structured fields:
 3. "callbackPreference": (string or null)
    - The preferred callback time or time window.
    - Smartly interpret informal time descriptions:
-     * "3 evening" or "3 in the evening" -> "3 PM"
-     * "at 3" (without am/pm) -> "3"
+     * "3 morning", "at 3 morning", "3 mornig", "3 in the morning" -> "3 AM"
+     * "3 evening", "at 3 evening", "3 night", "3 in the evening" -> "3 PM"
+     * "at 3" (without am/pm or morning/evening) -> "3"
      * "after 3 p.m." -> "after 3 p.m."
-     * "morning" or "prefers morning callback" -> "morning"
+     * "morning" or "prefers morning callback" (without an explicit hour) -> "morning"
      * "afternoon" -> "afternoon"
      * "evening" -> "evening"
    - If no time preference is stated, return null.
@@ -273,7 +319,7 @@ Return ONLY a JSON object:
     const result: AgentExtractionResult = {
       patientRef: normalizePatientRef(parsed.patientRef),
       requestType: normalizeRequestType(parsed.requestType),
-      callbackPreference: parsed.callbackPreference ? String(parsed.callbackPreference).trim() : null,
+      callbackPreference: normalizeCallbackPreference(parsed.callbackPreference, note),
       rawNote,
       imageUrl: cleanImageData ? `data:${imageMimeType};base64,${cleanImageData}` : null,
       extractorUsed: 'gemini',
